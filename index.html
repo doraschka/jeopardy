@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jeopardy! Quiz Show & Editor</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- Google Fonts: Impact/Korinna-styled display font & Inter -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Inter:wght@400;600;700&display=swap">
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Oswald', 'sans-serif']
+          },
+          colors: {
+            jeopardy: {
+              blue: '#060ce9',
+              darkBlue: '#020556',
+              gold: '#ffcc00',
+              goldHover: '#e6b800',
+              accent: '#1155cc'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style>
+    /* Custom Board Styles & Transitions */
+    .board-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 0.5rem;
+    }
+    .text-shadow-gold {
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8), 0 0 10px rgba(255, 204, 0, 0.4);
+    }
+    .text-shadow-blue {
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.9);
+    }
+    /* Modal Animation */
+    @keyframes modalPop {
+      0% { transform: scale(0.8); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .modal-anim {
+      animation: modalPop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans selection:bg-yellow-400 selection:text-black">
+
+  <!-- TOP HEADER NAV -->
+  <header class="bg-slate-900 border-b border-slate-800 px-4 py-3 sticky top-0 z-40 shadow-lg">
+    <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-4">
+      
+      <!-- Logo & Title -->
+      <div class="flex items-center gap-3">
+        <div class="bg-gradient-to-tr from-yellow-500 to-amber-300 text-slate-950 font-display font-bold text-2xl px-3 py-1 rounded shadow-md tracking-wider">
+          JEOPARDY!
+        </div>
+        <span class="text-xs md:text-sm text-slate-400 font-medium hidden sm:inline-block">
+          Interactive Quiz Engine
+        </span>
+      </div>
+
+      <!-- Mode Switcher Buttons -->
+      <div class="flex items-center gap-2 bg-slate-800 p-1 rounded-lg border border-slate-700">
+        <button id="navPlayBtn" onclick="switchMode('play')" class="px-4 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 bg-jeopardy-gold text-slate-950 shadow-md">
+          <i class="fa-solid fa-gamepad mr-1.5"></i>Spiel-Modus
+        </button>
+        <button id="navEditBtn" onclick="switchMode('edit')" class="px-4 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 text-slate-300 hover:text-white">
+          <i class="fa-solid fa-pen-to-square mr-1.5"></i>Editor / Editor-Modus
+        </button>
+      </div>
+
+      <!-- Action Tools (Sound, Presets, Reset) -->
+      <div class="flex items-center gap-2">
+        <button onclick="toggleAudio()" id="audioToggleBtn" title="Ton umschalten" class="p-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700">
+          <i class="fa-solid fa-volume-high text-lg" id="audioIcon"></i>
+        </button>
+        <button onclick="confirmResetGame()" title="Spielstand zurücksetzen" class="px-3 py-1.5 rounded-lg bg-red-900/40 hover:bg-red-800/60 border border-red-700/50 text-red-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-rotate-right"></i>
+          <span class="hidden sm:inline">Reset</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-grow flex flex-col p-2 sm:p-4 md:p-6 max-w-[1600px] w-full mx-auto">
+
+    <!-- ==================== PLAY MODE VIEW ==================== -->
+    <section id="playView" class="flex-grow flex flex-col gap-4">
+      
+      <!-- Jeopardy Board Grid Container -->
+      <div class="flex-grow bg-slate-900 border-2 border-slate-800 rounded-xl p-2 sm:p-4 shadow-2xl flex flex-col justify-center overflow-x-auto">
+        <div id="boardContainer" class="board-grid min-w-[700px] gap-2">
+          <!-- Dynamically populated via JS -->
+        </div>
+      </div>
+
+      <!-- Teams & Scoreboard Section -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 sm:p-4 shadow-xl">
+        <div class="flex justify-between items-center mb-3">
+          <h3 class="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+            <i class="fa-solid fa-users text-jeopardy-gold"></i> Teams & Punktestand
+          </h3>
+          <button onclick="addNewTeam()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1.5 rounded border border-slate-700 flex items-center gap-1 transition">
+            <i class="fa-solid fa-plus text-green-400"></i> Team hinzufügen
+          </button>
+        </div>
+
+        <!-- Teams List Container -->
+        <div id="teamsContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <!-- Dynamically populated via JS -->
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ==================== EDITOR MODE VIEW ==================== -->
+    <section id="editView" class="hidden flex-grow flex-col gap-6">
+      
+      <!-- Editor Actions Header -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap justify-between items-center gap-4">
+        <div>
+          <h2 class="text-xl font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-sliders text-jeopardy-gold"></i> Jeopardy Board Editor
+          </h2>
+          <p class="text-xs sm:text-sm text-slate-400">Erstelle oder bearbeite 6 Kategorien mit jeweils 5-10 Punktestufen (100 bis 1000 Punkte).</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="loadDefaultITQuiz()" class="px-3 py-2 bg-blue-900/50 hover:bg-blue-800/80 border border-blue-700 text-blue-200 text-xs sm:text-sm font-semibold rounded-lg flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-arrow-rotate-left"></i> IT/Samba Vorlage laden
+          </button>
+          <button onclick="exportQuizJSON()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs sm:text-sm font-semibold rounded-lg flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-download text-emerald-400"></i> JSON Export
+          </button>
+          <label class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs sm:text-sm font-semibold rounded-lg flex items-center gap-1.5 transition cursor-pointer">
+            <i class="fa-solid fa-upload text-amber-400"></i> JSON Import
+            <input type="file" id="jsonFileInput" accept=".json" onchange="importQuizJSON(event)" class="hidden">
+          </label>
+          <button onclick="saveEditorData()" class="px-4 py-2 bg-jeopardy-gold hover:bg-amber-400 text-slate-950 text-xs sm:text-sm font-bold rounded-lg flex items-center gap-1.5 shadow-md transition">
+            <i class="fa-solid fa-floppy-disk"></i> Speichern &amp; Anwenden
+          </button>
+        </div>
+      </div>
+
+      <!-- Point Levels Selector -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <label class="text-sm font-semibold text-slate-300">Punktestufen pro Kategorie:</label>
+          <select id="pointStepsSelect" onchange="changePointStructure(this.value)" class="bg-slate-950 border border-slate-700 text-white rounded-lg px-3 py-1.5 text-sm font-semibold focus:outline-none focus:border-jeopardy-gold">
+            <option value="5_classic">5 Stufen (100, 200, 300, 400, 500)</option>
+            <option value="5_double">5 Stufen (200, 400, 600, 800, 1000)</option>
+            <option value="10_full">10 Stufen (100 bis 1000 in 100er Schritten)</option>
+          </select>
+        </div>
+        <span class="text-xs text-slate-500">Änderungen an den Stufen passen das Eingabeformular automatisch an.</span>
+      </div>
+
+      <!-- Categories & Questions Editor Grid -->
+      <div id="editorCategoriesContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Generated dynamically via JS -->
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ==================== QUESTION MODAL OVERLAY ==================== -->
+  <div id="questionModal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-jeopardy-blue border-4 border-yellow-400 rounded-2xl max-w-4xl w-full shadow-2xl overflow-hidden modal-anim flex flex-col max-h-[90vh]">
+      
+      <!-- Modal Header -->
+      <div class="bg-jeopardy-darkBlue px-6 py-4 border-b border-yellow-500/40 flex justify-between items-center">
+        <div>
+          <span id="modalCategory" class="text-yellow-400 font-display text-lg uppercase tracking-wider font-bold">KATEGORIE</span>
+          <span id="modalPoints" class="ml-3 bg-yellow-400 text-slate-950 font-bold px-2.5 py-0.5 rounded text-sm">500 $</span>
+        </div>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-white text-2xl transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body (Question & Answer display) -->
+      <div class="p-6 sm:p-10 flex-grow flex flex-col justify-center items-center text-center overflow-y-auto">
+        <!-- Question Text -->
+        <div class="mb-6">
+          <span class="text-xs font-semibold text-blue-200 uppercase tracking-widest block mb-2">Frage / Hinweistext</span>
+          <h2 id="modalQuestionText" class="font-display text-2xl sm:text-4xl font-bold text-white leading-relaxed text-shadow-blue">
+            Hier steht die Frage?
+          </h2>
+        </div>
+
+        <!-- Answer Container (Hidden until revealed) -->
+        <div id="modalAnswerBox" class="w-full bg-slate-950/80 border-2 border-yellow-400/80 rounded-xl p-5 mt-2 hidden transition-all">
+          <span class="text-xs font-bold text-yellow-400 uppercase tracking-widest block mb-1">Lösung / Antwort</span>
+          <p id="modalAnswerText" class="font-display text-xl sm:text-3xl text-yellow-300 font-semibold">
+            Das ist die Antwort!
+          </p>
+        </div>
+      </div>
+
+      <!-- Modal Footer (Controls & Scoring) -->
+      <div class="bg-slate-900 border-t border-slate-800 p-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+        
+        <!-- Action Buttons -->
+        <div class="flex items-center gap-2 w-full sm:w-auto">
+          <button id="revealAnswerBtn" onclick="revealAnswer()" class="flex-1 sm:flex-none px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-bold rounded-lg text-sm transition shadow">
+            <i class="fa-solid fa-eye mr-1.5"></i> Antwort auflösen
+          </button>
+          <button onclick="playBuzzerSound()" class="px-3 py-2 bg-red-800 hover:bg-red-700 text-white font-bold rounded-lg text-sm transition" title="Buzzer Sound abspielen">
+            <i class="fa-solid fa-bell"></i>
+          </button>
+        </div>
+
+        <!-- Team Score Awarding Buttons -->
+        <div class="flex flex-wrap items-center justify-center sm:justify-end gap-2 w-full sm:w-auto">
+          <span class="text-xs font-semibold text-slate-400 w-full sm:w-auto text-center sm:text-left">Punkte vergeben an:</span>
+          <div id="modalTeamAwardButtons" class="flex flex-wrap gap-1.5">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    /* ===================================================================
+       1. DEFAULT QUIZ DATA (IT / SAMBA / LINUX THEME)
+       =================================================================== */
+    const DEFAULT_QUIZ = {
+      pointType: "5_classic", // 5_classic (100-500), 5_double (200-1000), 10_full (100-1000)
+      categories: [
+        {
+          title: "Samba Grundlagen",
+          questions: [
+            { points: 100, q: "Wofür steht die Abkürzung SMB im Netzwerkumfeld?", a: "Server Message Block", answered: false },
+            { points: 200, q: "Welcher Samba-Daemon ist primär für die Bereitstellung von Datei- und Druckdiensten zuständig?", a: "smbd", answered: false },
+            { points: 300, q: "In welcher zentralen Konfigurationsdatei wird Samba unter Linux konfiguriert?", a: "/etc/samba/smb.conf", answered: false },
+            { points: 400, q: "Mit welchem Befehl kann die Syntax der Samba-Konfigurationsdatei auf Fehler geprüft werden?", a: "testparm", answered: false },
+            { points: 500, q: "Welcher Daemon ermöglicht die Auflösung von NetBIOS-Namen?", a: "nmbd", answered: false }
+          ]
+        },
+        {
+          title: "Protokolle & Ports",
+          questions: [
+            { points: 100, q: "Auf welcher OSI-Schicht befinden sich TCP- und UDP-Ports?", a: "Schicht 4 (Transportschicht / Transport Layer)", answered: false },
+            { points: 200, q: "Welcher TCP-Port wird für Direct SMB (ohne NetBIOS) standardmäßig genutzt?", a: "Port 445", answered: false },
+            { points: 300, q: "Welches Protokoll war der Nachfolger von SMB 1.0 und wurde von Microsoft überarbeitet?", a: "CIFS (Common Internet File System) / SMB 2.0", answered: false },
+            { points: 400, q: "Welches moderne SMB-Protokoll bietet integrierte AES-Verschlüsselung?", a: "SMB 3.0 / SMB 3.1.1", answered: false },
+            { points: 500, q: "Welche UDP-Ports werden für den klassischen NetBIOS Name & Datagram Service genutzt?", a: "UDP Ports 137 und 138", answered: false }
+          ]
+        },
+        {
+          title: "Benutzer & Rechte",
+          questions: [
+            { points: 100, q: "Welches Tool wird verwendet, um einem Samba-Benutzer ein Kennwort zuzuweisen oder ihn zu aktivieren?", a: "smbpasswd (z. B. smbpasswd -a user)", answered: false },
+            { points: 200, q: "Richtig oder Falsch: Ein Samba-Benutzer muss zwingend auch als Linux-Systembenutzer existieren.", a: "Richtig (außer bei reinen Guest-Freigaben)", answered: false },
+            { points: 300, q: "Welche Linux-Rechte greifen zuerst: Samba-Freigaberechte oder Dateisystem-Rechte (POSIX)?", a: "Samba prüft zuerst, aber das restriktivste Recht gewinnt stets!", answered: false },
+            { points: 400, q: "Wie heißt die Standard-Passwortdatenbankdatei von Samba im TDB-Format?", a: "passdb.tdb", answered: false },
+            { points: 500, q: "Welcher Daemon wird benötigt, um Linux an ein Active Directory zur Benutzerauflösung anzubinden?", a: "winbindd (oder SSSD)", answered: false }
+          ]
+        },
+        {
+          title: "Linux Systempraxis",
+          questions: [
+            { points: 100, q: "Welches Security-Modul unter RedHat/CentOS/Fedora blockiert Samba-Freigaben oft standardmäßig?", a: "SELinux", answered: false },
+            { points: 200, q: "Mit welchem Befehl wechselt man den Besitzer einer Datei oder eines Ordners unter Linux?", a: "chown", answered: false },
+            { points: 300, q: "Welches Werkzeug wird genutzt, um Netzlaufwerke unter Linux manuell einzubinden?", a: "mount (z.B. mount -t cifs ...)", answered: false },
+            { points: 400, q: "Welcher Dienst sorgt bei Kerberos-Authentifizierung für die zwingend erforderliche exakte Uhrzeit?", a: "NTP / chrony", answered: false },
+            { points: 500, q: "Welcher Linux-Befehl zeigt aktive Netzwerkverbindungen und offene Ports an?", a: "ss (oder netstat)", answered: false }
+          ]
+        },
+        {
+          title: "Netzwerk & Security",
+          questions: [
+            { points: 100, q: "Warum sollte das veraltete SMB1-Protokoll in allen Netzwerken deaktiviert werden?", a: "Sicherheitslücken (z.B. WannaCry / EternalBlue Exploits)", answered: false },
+            { points: 200, q: "Was bedeutet DNS im Netzwerkbereich?", a: "Domain Name System", answered: false },
+            { points: 300, q: "Welches Authentifizierungsprotokoll nutzt ein Active Directory bevorzugt statt NTLM?", a: "Kerberos", answered: false },
+            { points: 400, q: "Welche Beitragsart erlaubt anonymen Zugriff auf Samba-Freigaben ohne Passwort?", a: "guest ok = yes (oder map to guest)", answered: false },
+            { points: 500, q: "Welcher Parameter beschränkt den Zugriff in smb.conf auf bestimmte IP-Subnetze?", a: "hosts allow (z.B. hosts allow = 192.168.1. )", answered: false }
+          ]
+        },
+        {
+          title: "Fachinformatiker Mix",
+          questions: [
+            { points: 100, q: "Auf welcher Schicht des OSI-Modells arbeitet ein Standard-Unmanaged-Switch?", a: "Schicht 2 (Sicherungsschicht / Data Link Layer)", answered: false },
+            { points: 200, q: "Welche Unterteilung erlaubt die logische Trennung von Netzwerken auf einem Switch?", a: "VLAN (Virtual Local Area Network)", answered: false },
+            { points: 300, q: "Wofür steht die Abkürzung RAID in der Datenspeicherung?", a: "Redundant Array of Independent Disks", answered: false },
+            { points: 400, q: "Wie viele nutzbare Host-IPs bietet ein /24 IPv4-Subnetz?", a: "254 IPs (256 minus Netz-ID und Broadcast)", answered: false },
+            { points: 500, q: "Welcher RAID-Level benötigt mindestens 3 Festplatten und verkraftet den Ausfall einer Platte?", a: "RAID 5", answered: false }
+          ]
+        }
+      ]
+    };
+
+    /* ===================================================================
+       2. GLOBAL STATE MANAGEMENT
+       =================================================================== */
+    let quizData = null;
+    let teams = [
+      { id: 1, name: "Team 1", score: 0 },
+      { id: 2, name: "Team 2", score: 0 }
+    ];
+    let activeQuestion = null; // Stores currently selected question reference
+    let audioEnabled = true;
+    let audioCtx = null;
+
+    /* ===================================================================
+       3. INITIALIZATION & LOCALSTORAGE
+       =================================================================== */
+    window.addEventListener('DOMContentLoaded', () => {
+      loadQuizState();
+      renderBoard();
+      renderTeams();
+    });
+
+    function loadQuizState() {
+      const savedQuiz = localStorage.getItem('jeopardy_quiz_data');
+      const savedTeams = localStorage.getItem('jeopardy_teams_data');
+
+      if (savedQuiz) {
+        try {
+          quizData = JSON.parse(savedQuiz);
+        } catch(e) {
+          quizData = JSON.parse(JSON.stringify(DEFAULT_QUIZ));
+        }
+      } else {
+        quizData = JSON.parse(JSON.stringify(DEFAULT_QUIZ));
+      }
+
+      if (savedTeams) {
+        try {
+          teams = JSON.parse(savedTeams);
+        } catch(e) {}
+      }
+    }
+
+    function saveStateToStorage() {
+      localStorage.setItem('jeopardy_quiz_data', JSON.stringify(quizData));
+      localStorage.setItem('jeopardy_teams_data', JSON.stringify(teams));
+    }
+
+    /* ===================================================================
+       4. AUDIO SYNTHESIZER (WEB AUDIO API)
+       =================================================================== */
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+    }
+
+    function toggleAudio() {
+      audioEnabled = !audioEnabled;
+      const icon = document.getElementById('audioIcon');
+      if (audioEnabled) {
+        icon.className = 'fa-solid fa-volume-high text-lg';
+      } else {
+        icon.className = 'fa-solid fa-volume-xmark text-lg text-red-400';
+      }
+    }
+
+    function playTone(freq, type, duration) {
+      if (!audioEnabled) return;
+      try {
+        initAudio();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch(e){}
+    }
+
+    function playCardClickSound() {
+      playTone(440, 'sine', 0.15);
+      setTimeout(() => playTone(880, 'sine', 0.2), 80);
+    }
+
+    function playBuzzerSound() {
+      playTone(150, 'sawtooth', 0.4);
+    }
+
+    function playCorrectSound() {
+      playTone(523.25, 'triangle', 0.12); // C5
+      setTimeout(() => playTone(659.25, 'triangle', 0.12), 100); // E5
+      setTimeout(() => playTone(783.99, 'triangle', 0.25), 200); // G5
+    }
+
+    /* ===================================================================
+       5. VIEW NAVIGATION & MODES
+       =================================================================== */
+    function switchMode(mode) {
+      const playView = document.getElementById('playView');
+      const editView = document.getElementById('editView');
+      const navPlayBtn = document.getElementById('navPlayBtn');
+      const navEditBtn = document.getElementById('navEditBtn');
+
+      if (mode === 'play') {
+        playView.classList.remove('hidden');
+        editView.classList.add('hidden');
+        navPlayBtn.className = "px-4 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 bg-jeopardy-gold text-slate-950 shadow-md";
+        navEditBtn.className = "px-4 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 text-slate-300 hover:text-white";
+        renderBoard();
+      } else {
+        playView.classList.add('hidden');
+        editView.classList.remove('hidden');
+        navEditBtn.className = "px-4 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 bg-jeopardy-gold text-slate-950 shadow-md";
+        navPlayBtn.className = "px-4 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 text-slate-300 hover:text-white";
+        renderEditor();
+      }
+    }
+
+    /* ===================================================================
+       6. GAME BOARD RENDERING (PLAY MODE)
+       =================================================================== */
+    function renderBoard() {
+      const board = document.getElementById('boardContainer');
+      board.innerHTML = '';
+
+      if (!quizData || !quizData.categories) return;
+
+      // Render Category Headers
+      quizData.categories.forEach(cat => {
+        const headerCard = document.createElement('div');
+        headerCard.className = "bg-jeopardy-darkBlue border-2 border-yellow-500/60 rounded-lg p-2 sm:p-4 text-center flex items-center justify-center min-h-[70px] sm:min-h-[90px] shadow-md";
+        headerCard.innerHTML = `<h3 class="font-display font-bold text-xs sm:text-base md:text-lg text-yellow-400 uppercase tracking-wider leading-tight text-shadow-blue">${escapeHtml(cat.title)}</h3>`;
+        board.appendChild(headerCard);
+      });
+
+      // Determine max rows across categories
+      const maxRows = Math.max(...quizData.categories.map(c => c.questions.length));
+
+      // Render Rows
+      for (let r = 0; r < maxRows; r++) {
+        for (let c = 0; c < 6; c++) {
+          const category = quizData.categories[c];
+          const q = category ? category.questions[r] : null;
+
+          const cell = document.createElement('div');
+          
+          if (q) {
+            if (q.answered) {
+              cell.className = "bg-slate-950/80 border border-slate-800 rounded-lg p-3 text-center flex items-center justify-center min-h-[60px] sm:min-h-[85px] cursor-not-allowed opacity-40 select-none";
+              cell.innerHTML = `<span class="font-display text-lg sm:text-2xl font-bold text-slate-600 line-through">${q.points}</span>`;
+            } else {
+              cell.className = "bg-jeopardy-blue hover:bg-blue-600 border-2 border-yellow-400 rounded-lg p-3 text-center flex items-center justify-center min-h-[60px] sm:min-h-[85px] cursor-pointer transition-all transform hover:-translate-y-1 hover:shadow-lg shadow-md group";
+              cell.onclick = () => openQuestionModal(c, r);
+              cell.innerHTML = `<span class="font-display text-xl sm:text-3xl md:text-4xl font-bold text-yellow-400 group-hover:scale-110 transition-transform text-shadow-gold">${q.points} $</span>`;
+            }
+          } else {
+            cell.className = "bg-slate-900 border border-slate-800 rounded-lg min-h-[60px] sm:min-h-[85px]";
+          }
+
+          board.appendChild(cell);
+        }
+      }
+    }
+
+    /* ===================================================================
+       7. QUESTION MODAL LOGIC
+       =================================================================== */
+    function openQuestionModal(catIdx, qIdx) {
+      const q = quizData.categories[catIdx].questions[qIdx];
+      activeQuestion = { catIdx, qIdx, question: q };
+
+      playCardClickSound();
+
+      document.getElementById('modalCategory').innerText = quizData.categories[catIdx].title;
+      document.getElementById('modalPoints').innerText = `${q.points} $`;
+      document.getElementById('modalQuestionText').innerText = q.q;
+      document.getElementById('modalAnswerText').innerText = q.a;
+      
+      // Hide answer by default
+      document.getElementById('modalAnswerBox').classList.add('hidden');
+      document.getElementById('revealAnswerBtn').classList.remove('hidden');
+
+      // Populate Team Award Buttons
+      const teamContainer = document.getElementById('modalTeamAwardButtons');
+      teamContainer.innerHTML = '';
+
+      teams.forEach(team => {
+        const btnPlus = document.createElement('button');
+        btnPlus.className = "px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-xs font-bold transition flex items-center gap-1 shadow";
+        btnPlus.innerHTML = `<i class="fa-solid fa-plus"></i> ${escapeHtml(team.name)}`;
+        btnPlus.onclick = () => awardPoints(team.id, q.points, true);
+
+        const btnMinus = document.createElement('button');
+        btnMinus.className = "px-2 py-1.5 bg-red-900/60 hover:bg-red-800 text-red-200 rounded text-xs font-semibold transition";
+        btnMinus.innerHTML = `<i class="fa-solid fa-minus"></i>`;
+        btnMinus.title = `${team.name} Punkte abziehen`;
+        btnMinus.onclick = () => awardPoints(team.id, q.points, false);
+
+        const group = document.createElement('div');
+        group.className = "flex items-center gap-0.5 bg-slate-800 p-1 rounded border border-slate-700";
+        group.appendChild(btnPlus);
+        group.appendChild(btnMinus);
+
+        teamContainer.appendChild(group);
+      });
+
+      // Pass/Close button
+      const passBtn = document.createElement('button');
+      passBtn.className = "px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs font-bold transition";
+      passBtn.innerText = "Ohne Wertung schließen";
+      passBtn.onclick = () => {
+        q.answered = true;
+        saveStateToStorage();
+        closeModal();
+        renderBoard();
+      };
+      teamContainer.appendChild(passBtn);
+
+      document.getElementById('questionModal').classList.remove('hidden');
+    }
+
+    function revealAnswer() {
+      document.getElementById('modalAnswerBox').classList.remove('hidden');
+      document.getElementById('revealAnswerBtn').classList.add('hidden');
+      playTone(600, 'sine', 0.2);
+    }
+
+    function awardPoints(teamId, points, isCorrect) {
+      const team = teams.find(t => t.id === teamId);
+      if (team) {
+        if (isCorrect) {
+          team.score += points;
+          playCorrectSound();
+        } else {
+          team.score -= points;
+          playBuzzerSound();
+        }
+      }
+
+      if (activeQuestion) {
+        activeQuestion.question.answered = true;
+      }
+
+      saveStateToStorage();
+      renderTeams();
+      closeModal();
+      renderBoard();
+    }
+
+    function closeModal() {
+      document.getElementById('questionModal').classList.add('hidden');
+      activeQuestion = null;
+    }
+
+    /* ===================================================================
+       8. TEAM MANAGEMENT & SCOREBOARD
+       =================================================================== */
+    function renderTeams() {
+      const container = document.getElementById('teamsContainer');
+      container.innerHTML = '';
+
+      teams.forEach((team, idx) => {
+        const card = document.createElement('div');
+        card.className = "bg-slate-950 border border-slate-800 rounded-lg p-3 flex justify-between items-center shadow-inner";
+        
+        card.innerHTML = `
+          <div class="flex-grow mr-2">
+            <input type="text" value="${escapeHtml(team.name)}" 
+              onchange="updateTeamName(${team.id}, this.value)"
+              class="bg-transparent font-bold text-slate-200 text-sm focus:outline-none focus:border-b border-jeopardy-gold w-full">
+            <div class="font-display font-bold text-2xl ${team.score < 0 ? 'text-red-400' : 'text-yellow-400'}">
+              ${team.score} $
+            </div>
+          </div>
+          <div class="flex items-center gap-1">
+            <button onclick="adjustTeamScore(${team.id}, 100)" class="w-7 h-7 bg-slate-800 hover:bg-slate-700 text-emerald-400 rounded font-bold text-xs flex items-center justify-center border border-slate-700" title="+100 Punkte">+100</button>
+            <button onclick="adjustTeamScore(${team.id}, -100)" class="w-7 h-7 bg-slate-800 hover:bg-slate-700 text-red-400 rounded font-bold text-xs flex items-center justify-center border border-slate-700" title="-100 Punkte">-100</button>
+            <button onclick="removeTeam(${team.id})" class="w-7 h-7 bg-red-950/40 hover:bg-red-900 text-red-400 rounded text-xs flex items-center justify-center border border-red-800/50 ml-1" title="Team löschen">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function addNewTeam() {
+      const newId = teams.length ? Math.max(...teams.map(t => t.id)) + 1 : 1;
+      teams.push({ id: newId, name: `Team ${newId}`, score: 0 });
+      saveStateToStorage();
+      renderTeams();
+    }
+
+    function removeTeam(id) {
+      if (teams.length <= 1) return;
+      teams = teams.filter(t => t.id !== id);
+      saveStateToStorage();
+      renderTeams();
+    }
+
+    function updateTeamName(id, newName) {
+      const team = teams.find(t => t.id === id);
+      if (team) {
+        team.name = newName || `Team ${id}`;
+        saveStateToStorage();
+      }
+    }
+
+    function adjustTeamScore(id, delta) {
+      const team = teams.find(t => t.id === id);
+      if (team) {
+        team.score += delta;
+        saveStateToStorage();
+        renderTeams();
+      }
+    }
+
+    /* ===================================================================
+       9. EDITOR MODE LOGIC & CUSTOMIZATION
+       =================================================================== */
+    function renderEditor() {
+      const container = document.getElementById('editorCategoriesContainer');
+      container.innerHTML = '';
+
+      document.getElementById('pointStepsSelect').value = quizData.pointType || "5_classic";
+
+      quizData.categories.forEach((cat, catIdx) => {
+        const catCard = document.createElement('div');
+        catCard.className = "bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg flex flex-col gap-4";
+
+        let questionsHTML = '';
+        cat.questions.forEach((q, qIdx) => {
+          questionsHTML += `
+            <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2">
+              <div class="flex justify-between items-center">
+                <span class="text-xs font-bold text-yellow-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                  ${q.points} Points
+                </span>
+                <label class="text-xs text-slate-400 flex items-center gap-1 cursor-pointer">
+                  <input type="checkbox" ${q.answered ? 'checked' : ''} onchange="toggleQuestionAnswered(${catIdx}, ${qIdx}, this.checked)" class="rounded bg-slate-800 border-slate-700 text-jeopardy-gold">
+                  Beantwortet
+                </label>
+              </div>
+              <div>
+                <label class="text-[11px] uppercase font-semibold text-slate-400 block mb-0.5">Frage / Hinweis</label>
+                <textarea rows="2" onchange="updateQuestionText(${catIdx}, ${qIdx}, 'q', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs text-slate-100 focus:outline-none focus:border-jeopardy-gold">${escapeHtml(q.q)}</textarea>
+              </div>
+              <div>
+                <label class="text-[11px] uppercase font-semibold text-slate-400 block mb-0.5">Lösung / Antwort</label>
+                <input type="text" value="${escapeHtml(q.a)}" onchange="updateQuestionText(${catIdx}, ${qIdx}, 'a', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs text-yellow-300 focus:outline-none focus:border-jeopardy-gold">
+              </div>
+            </div>
+          `;
+        });
+
+        catCard.innerHTML = `
+          <div class="border-b border-slate-800 pb-3">
+            <label class="text-xs uppercase font-bold text-jeopardy-gold block mb-1">Kategorie ${catIdx + 1} Titel</label>
+            <input type="text" value="${escapeHtml(cat.title)}" onchange="updateCategoryTitle(${catIdx}, this.value)" class="w-full bg-slate-950 border border-slate-700 font-bold text-slate-100 rounded p-2 text-sm focus:outline-none focus:border-jeopardy-gold">
+          </div>
+          <div class="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+            ${questionsHTML}
+          </div>
+        `;
+
+        container.appendChild(catCard);
+      });
+    }
+
+    function updateCategoryTitle(catIdx, title) {
+      quizData.categories[catIdx].title = title;
+    }
+
+    function updateQuestionText(catIdx, qIdx, field, val) {
+      quizData.categories[catIdx].questions[qIdx][field] = val;
+    }
+
+    function toggleQuestionAnswered(catIdx, qIdx, isAnswered) {
+      quizData.categories[catIdx].questions[qIdx].answered = isAnswered;
+    }
+
+    function changePointStructure(type) {
+      quizData.pointType = type;
+      let targetPoints = [100, 200, 300, 400, 500];
+
+      if (type === "5_double") {
+        targetPoints = [200, 400, 600, 800, 1000];
+      } else if (type === "10_full") {
+        targetPoints = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
+      }
+
+      quizData.categories.forEach(cat => {
+        const newQuestions = targetPoints.map((pts, idx) => {
+          const existing = cat.questions[idx];
+          return {
+            points: pts,
+            q: existing ? existing.q : `Frage für ${pts} Punkte`,
+            a: existing ? existing.a : `Antwort für ${pts} Punkte`,
+            answered: existing ? existing.answered : false
+          };
+        });
+        cat.questions = newQuestions;
+      });
+
+      renderEditor();
+    }
+
+    function saveEditorData() {
+      saveStateToStorage();
+      alert("Jeopardy Board erfolgreich gespeichert!");
+      switchMode('play');
+    }
+
+    function loadDefaultITQuiz() {
+      if (confirm("Möchtest du das Jeopardy-Board wirklich auf die IT/Samba Standardvorlage zurücksetzen? Ungespeicherte Änderungen gehen verloren.")) {
+        quizData = JSON.parse(JSON.stringify(DEFAULT_QUIZ));
+        saveStateToStorage();
+        renderEditor();
+      }
+    }
+
+    /* ===================================================================
+       10. IMPORT & EXPORT JSON
+       =================================================================== */
+    function exportQuizJSON() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(quizData, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `jeopardy_board_${new Date().toISOString().slice(0,10)}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    function importQuizJSON(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const imported = JSON.parse(e.target.result);
+          if (imported && imported.categories && Array.isArray(imported.categories)) {
+            quizData = imported;
+            saveStateToStorage();
+            renderEditor();
+            alert("Quiz-Daten erfolgreich importiert!");
+          } else {
+            alert("Ungültiges JSON-Format: Keine Kategorien enthalten.");
+          }
+        } catch(err) {
+          alert("Fehler beim Lesen der JSON-Datei.");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function confirmResetGame() {
+      if (confirm("Möchtest du den aktuellen Spielstand (beantwortete Fragen & Punkte) zurücksetzen? Die Fragen bleiben erhalten.")) {
+        quizData.categories.forEach(cat => {
+          cat.questions.forEach(q => q.answered = false);
+        });
+        teams.forEach(t => t.score = 0);
+        saveStateToStorage();
+        renderBoard();
+        renderTeams();
+      }
+    }
+
+    /* Utility Helpers */
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+    }
+  </script>
+</body>
+</html>
